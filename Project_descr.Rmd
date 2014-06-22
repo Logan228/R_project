@@ -1,0 +1,110 @@
+##Analysis Process
+*Data Clearing
+*K-fold CV for different model
+*Predict the class from testing data
+##Data Clearing
+========================================================
+*Load these data and packages
+```{r}
+setwd("D:/Practical Machine Learning/Project_data")
+ini.training = read.csv("pml-training.csv")[,-1]
+ini.testing = read.csv("pml-testing.csv")[,-1]
+library(caret);library(ggplot2)
+```
+
+*remove the column of all element are NA or NULL
+```{r}
+names(ini.training)
+num.yes = length(which(ini.training$new_window == "yes"))
+training = ini.training[,colSums(is.na(ini.training)) < (nrow(ini.training)-num.yes)]
+ttt = which(ini.training$new_window == "yes")
+ttry = training[-ttt,]
+dd = which(sapply(ttry,class) == "factor")[-c(1,2,3,37)]
+
+f.training = training[,-as.vector(dd)]
+f.testing = ini.testing[,names(ini.testing) %in% names(f.training)[-59]]
+f.testing$problem_id = ini.testing$problem_id
+```
+
+##K-fold CV for different model
+*Creating a function to build different model for CV
+```{r}
+To.test.model = function(f.training,fold,model,...) {
+  folds = createFolds(y = f.training$classe, k = fold,list = T, returnTrain =T)
+  acc = vector()
+  
+  if (model == "nb") {is.pca ="pca"
+  } else is.pca = NULL
+  
+  for(i in 1:fold) {
+    mode_train = f.training[folds[[i]],]
+    mode_test = f.training[-folds[[i]],]
+    #browser()
+    mod= train(classe~.,data=mode_train,method=model,preProcess = is.pca,verbose=...)
+    confuesM = confusionMatrix(mode_test$classe,predict(mod,newdata = mode_test))
+    acc[i] = confuesM$overall[1]
+  }
+  acc.aver = mean(acc)
+  list("acc.obs"=acc,"acc.mean"=acc.aver)
+}
+```
+
+*Because I have no much time...so I reduce the sample and cv times
+```{r}
+f.training = f.training[sample(1:nrow(f.training),1500),]
+```
+
+*Naive Byaes & PCA
+```{r}
+set.seed(7)
+nb.time = Sys.time()
+NB_PCA = To.test.model(f.training=f.training,fold=3,model="nb")
+exe.time_nb = Sys.time()-nb.time
+```
+
+*boosting
+```{r}
+set.seed(7)
+bo.time = Sys.time()
+boot_tree = To.test.model(f.training = f.training ,fold=3,model="gbm",verbose=F)
+exe.time_bo = Sys.time()-bo.time
+```
+
+*Random Foreast
+```{r}
+set.seed(7)
+rf.time = Sys.time()
+rf = To.test.model(f.training = f.training ,fold=3,model="rf")
+exe.time_rf = Sys.time()-rf.time
+```
+
+*MARS
+```{r}
+set.seed(7)
+mar.time = Sys.time()
+mars = To.test.model(f.training = f.training ,fold=3,model="earth")
+exe.time_mar = Sys.time()-mar.time
+```
+
+*Choic the best model:According to the accurace of average & variation, choice the best mode is boosting
+```{r}
+acc.da = data.frame(c(NB_PCA$acc.obs,boot_tree$acc.obs,rf$acc.obs),
+                    rep(c("NB","Boosting","RF"),each=3)) 
+colnames(acc.da) = c("Accuracy","Method")
+p <- ggplot(acc.da, aes(factor(Method), Accuracy))
+p + geom_boxplot()
+c(sd(NB_PCA$acc.obs),sd(boot_tree$acc.obs),sd(rf$acc.obs))
+```
+
+```{r}
+bestMod = traing(clases~.,data=f.training,method="gbm")
+predict(bestMod,newdata=f.testing)
+```
+
+
+
+
+
+
+
+
